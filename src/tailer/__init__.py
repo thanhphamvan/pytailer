@@ -1,9 +1,30 @@
 import re
 import sys
 import time
+import signal
+from contextlib import contextmanager
+
 
 if sys.version_info < (3,):
     range = xrange
+
+
+def raise_timeout():
+    raise TimeoutError
+
+
+@contextmanager
+def timeout_ctx(time):
+    signal.signal(signal.SIGALRM, raise_timeout)
+    signal.alarm(time)
+
+    try:
+        yield
+    except TimeoutError:
+        raise
+    finally:
+        signal.signal(signal.SIGALRM, signal.SIG_IGN)
+
 
 class Tailer(object):
     """\
@@ -150,36 +171,68 @@ class Tailer(object):
         else:
             return []
 
-    def follow(self, delay=1.0):
+    def follow(self, delay=1.0, timeout=None):
         """\
         Iterator generator that returns lines as data is added to the file.
 
         Based on: http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/157035
         """
-        trailing = True
+        if timeout is None:
+            trailing = True
 
-        while 1:
-            where = self.file.tell()
-            line = self.file.readline()
-            if line:
-                if trailing and line in self.line_terminators:
-                    # This is just the line terminator added to the end of the file
-                    # before a new line, ignore.
-                    trailing = False
-                    continue
+            while 1:
+                where = self.file.tell()
+                line = self.file.readline()
+                if line:
+                    if trailing and line in self.line_terminators:
+                        # This is just the line terminator added to the end of the file
+                        # before a new line, ignore.
+                        trailing = False
+                        continue
 
-                if line[-1] in self.line_terminators:
-                    line = line[:-1]
-                    if line[-1:] == '\r\n' and '\r\n' in self.line_terminators:
-                        # found crlf
+                    if line[-1] in self.line_terminators:
                         line = line[:-1]
+                        if line[-1:] == '\r\n' and '\r\n' in self.line_terminators:
+                            # found crlf
+                            line = line[:-1]
 
-                trailing = False
-                yield line
-            else:
-                trailing = True
-                self.seek(where)
-                time.sleep(delay)
+                    trailing = False
+                    yield line
+                else:
+                    trailing = True
+                    self.seek(where)
+                    time.sleep(delay)
+        elif isinstance(timeout, int) or isinstance(timeout, float):
+            trailing = True
+
+            while True:
+                try:
+                    with timeout_ctx(time=timeout):
+                        where = self.file.tell()
+                        line = self.file.readline()
+                        try:
+                            if line:
+                                if trailing and line in self.line_terminators:
+                                    # This is just the line terminator added to the end of the file
+                                    # before a new line, ignore.
+                                    trailing = False
+                                    continue
+
+                                if line[-1] in self.line_terminators:
+                                    line = line[:-1]
+                                    if line[-1:] == '\r\n' and '\r\n' in self.line_terminators:
+                                        # found crlf
+                                        line = line[:-1]
+
+                                trailing = False
+                                yield line
+                            else:
+                                trailing = True
+                                self.seek(where)
+                                time.sleep(delay)
+                except TimeoutError:
+                    break
+
 
     def __iter__(self):
         return self.follow()

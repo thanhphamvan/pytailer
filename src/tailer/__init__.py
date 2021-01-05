@@ -202,7 +202,7 @@ class Tailer(object):
                     trailing = True
                     self.seek(where)
                     time.sleep(delay)
-        elif isinstance(timeout, int) or isinstance(timeout, float):
+        elif (isinstance(timeout, int) or isinstance(timeout, float)) and timeout > 0:
             trailing = True
 
             while True:
@@ -271,7 +271,7 @@ def head(file, lines=10):
     """
     return Tailer(file).head(lines)
 
-def follow(file, delay=1.0):
+def follow(file, delay=1.0, timeout=None):
     """\
     Iterator generator that returns lines as data is added to the file.
 
@@ -291,7 +291,7 @@ def follow(file, delay=1.0):
     >>> fo.close()
     >>> os.remove('test_follow.txt')
     """
-    return Tailer(file, end=True).follow(delay)
+    return Tailer(file, end=True).follow(delay, timeout=timeout)
 
 def _test():
     import doctest

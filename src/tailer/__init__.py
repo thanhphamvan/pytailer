@@ -210,26 +210,25 @@ class Tailer(object):
                     with timeout_ctx(time=timeout):
                         where = self.file.tell()
                         line = self.file.readline()
-                        try:
-                            if line:
-                                if trailing and line in self.line_terminators:
-                                    # This is just the line terminator added to the end of the file
-                                    # before a new line, ignore.
-                                    trailing = False
-                                    continue
-
-                                if line[-1] in self.line_terminators:
-                                    line = line[:-1]
-                                    if line[-1:] == '\r\n' and '\r\n' in self.line_terminators:
-                                        # found crlf
-                                        line = line[:-1]
-
+                        if line:
+                            if trailing and line in self.line_terminators:
+                                # This is just the line terminator added to the end of the file
+                                # before a new line, ignore.
                                 trailing = False
-                                yield line
-                            else:
-                                trailing = True
-                                self.seek(where)
-                                time.sleep(delay)
+                                continue
+
+                            if line[-1] in self.line_terminators:
+                                line = line[:-1]
+                                if line[-1:] == '\r\n' and '\r\n' in self.line_terminators:
+                                    # found crlf
+                                    line = line[:-1]
+
+                            trailing = False
+                            yield line
+                        else:
+                            trailing = True
+                            self.seek(where)
+                            time.sleep(delay)
                 except TimeoutError:
                     break
 
